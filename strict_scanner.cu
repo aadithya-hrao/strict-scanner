@@ -36,26 +36,15 @@ __global__ void check_token(uint8_t *image, uint32_t image_dimx,
   }
 }
 
-__global__ void fill_matrix(bool *matrix, uint32_t mat_dimx,
-                            uint32_t mat_dimy) {
-  int x = blockIdx.x * blockDim.x + threadIdx.x;
-  int y = blockIdx.y * blockDim.y + threadIdx.y;
-
-  if (x > mat_dimx || y > mat_dimy)
-    return;
-  matrix[x * mat_dimx + y] = false;
-}
 __global__ void reduce_mat(bool *matrix, uint32_t image_dimx,
-                           uint32_t image_dimy, uint32_t *token_dimx,
-                           uint32_t *token_dimy) {
+                           uint32_t image_dimy) {
   int x = blockIdx.x * blockDim.x + threadIdx.x;
   int y = blockIdx.y * blockDim.y + threadIdx.y;
 
   if (x > image_dimx || y > image_dimy)
     return;
   if (matrix[x * image_dimx + y] == true) {
-    *token_dimx = x;
-    *token_dimy = y;
+    printf("x: %d, y: %d\n", x, y);
   }
 }
 #pragma pack(1)
@@ -236,12 +225,11 @@ int main(int argc, char *argv[]) {
   cudaMalloc(&res_x, sizeof(uint32_t));
   cudaMalloc(&res_y, sizeof(uint32_t));
   reduce_mat<<<dim3((image_dimx + 15) / 16, (image_dimy + 15) / 16),
-               dim3(16, 16)>>>(d_match_matrix, image_dimx, image_dimy, res_x,
-                                res_y);
+               dim3(16, 16)>>>(d_match_matrix, image_dimx, image_dimy);
   uint32_t x, y;
   cudaMemcpy(&x, res_x, sizeof(uint32_t), cudaMemcpyDeviceToHost);
   cudaMemcpy(&y, res_y, sizeof(uint32_t), cudaMemcpyDeviceToHost);
-  printf("x: %d, y: %d\n", x, y);
+  // printf("x: %d, y: %d\n", x, y);
 
       return 0;
 }

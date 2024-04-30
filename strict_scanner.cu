@@ -9,10 +9,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+auto block_threads = dim3(16, 16);
+
 __global__ void check_token(uint8_t *image, uint32_t image_dimx,
                             uint32_t image_dimy, uint8_t *token,
                             uint32_t token_dimx, uint32_t token_dimy,
-                            float match_similarity_threshold,
+                            float error_threshold, 
                             bool *match_matrix) {
   int x = blockIdx.x * blockDim.x + threadIdx.x;
   int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -20,8 +22,6 @@ __global__ void check_token(uint8_t *image, uint32_t image_dimx,
   if (x > (image_dimx - token_dimx + 1) || y > (image_dimy - token_dimy + 1))
     return;
 
-  float error_threshold =
-      (1 - match_similarity_threshold) * 255 * token_dimy * token_dimx;
 
   float match_difference_error = 0;
 
@@ -99,12 +99,11 @@ int strict_scan(uint8_t *image, uint32_t image_dimx, uint32_t image_dimy,
       (1 - match_similarity_threshold) * 255 * token_dimy * token_dimx;
   printf("Error threshold: %f\n", error_threshold);
 
-  auto blocks = dim3(((image_dimx - token_dimx + 1) - 15) / 16,
-                     ((image_dimy - token_dimy + 1) - 15) / 16);
+  auto blocks = dim3(((image_dimx - token_dimx + 1) + block_threads.x-1) / block_threads.x,
+                     ((image_dimy - token_dimy + 1) + block_threads.y-1) / block_threads.y);
 
-  auto threads = dim3(16, 16);
 
-  check_token<<<blocks, threads>>>(image, image_dimx, image_dimy, token,
+  check_token<<<blocks, block_threads>>>(image, image_dimx, image_dimy, token,
                                    token_dimx, token_dimy,
                                    match_similarity_threshold, match_matrix);
 
@@ -208,8 +207,6 @@ int main(int argc, char *argv[]) {
 
   bool *d_match_matrix;
   cudaMalloc(&d_match_matrix, (image_dimx * image_dimy));
-  fill_matrix<<<dim3((image_dimx + 15) / 16, (image_dimy + 15) / 16),
-                dim3(16, 16)>>>(d_match_matrix, image_dimx, image_dimy);
 
   // scan the image
   printf("Scanning with threshold %f\n", SIMILARITY_THRESHOLD);
